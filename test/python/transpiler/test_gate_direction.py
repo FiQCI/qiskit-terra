@@ -15,6 +15,7 @@ import unittest
 from math import pi
 
 from qiskit import ClassicalRegister, QuantumRegister, QuantumCircuit
+from qiskit.compiler import transpile
 from qiskit.transpiler import TranspilerError
 from qiskit.transpiler import CouplingMap
 from qiskit.transpiler.passes import GateDirection
@@ -132,6 +133,11 @@ class TestGateDirection(QiskitTestCase):
         coupling = CouplingMap([[0, 1]])
         dag = circuit_to_dag(circuit)
 
+        #       ┌─────────┐ ┌──────┐┌───┐
+        # qr_0: ┤ Ry(π/2) ├─┤0     ├┤ H ├
+        #       ├─────────┴┐│  Ecr │├───┤
+        # qr_1: ┤ Ry(-π/2) ├┤1     ├┤ H ├
+        #       └──────────┘└──────┘└───┘
         expected = QuantumCircuit(qr)
         expected.ry(pi / 2, qr[0])
         expected.ry(-pi / 2, qr[1])
@@ -208,6 +214,14 @@ class TestGateDirection(QiskitTestCase):
         coupling = CouplingMap([[0, 1]])
         dag = circuit_to_dag(circuit)
 
+        #                     ┌───┐                ┌───┐      ┌───┐     ┌───┐
+        # q_0: ───■───────────┤ H ├────■───────────┤ H ├───■──┤ H ├──■──┤ H ├
+        #       ┌─┴─┐  ┌───┐  └─╥─┘  ┌─┴─┐  ┌───┐  └─╥─┘ ┌─┴─┐├───┤┌─┴─┐├───┤
+        # q_1: ─┤ X ├──┤ H ├────╫────┤ X ├──┤ H ├────╫───┤ X ├┤ H ├┤ X ├┤ H ├
+        #       └─╥─┘  └─╥─┘    ║    └─╥─┘  └─╥─┘    ║   └───┘└───┘└───┘└───┘
+        #      ┌──╨──┐┌──╨──┐┌──╨──┐┌──╨──┐┌──╨──┐┌──╨──┐
+        # c: 1/╡ 0x0 ╞╡ 0x0 ╞╡ 0x0 ╞╡ 0x0 ╞╡ 0x0 ╞╡ 0x0 ╞════════════════════
+        #      └─────┘└─────┘└─────┘└─────┘└─────┘└─────┘
         expected = QuantumCircuit(qr, cr)
         expected.cx(qr[0], qr[1]).c_if(cr, 0)
 
@@ -231,6 +245,21 @@ class TestGateDirection(QiskitTestCase):
         after = pass_.run(dag)
 
         self.assertEqual(circuit_to_dag(expected), after)
+
+    def test_regression_gh_8387(self):
+        """Regression test for flipping of CZ gate"""
+        qc = QuantumCircuit(3)
+        qc.cz(1, 0)
+        qc.barrier()
+        qc.cz(2, 0)
+
+        coupling_map = CouplingMap([[0, 1], [1, 2]])
+        _ = transpile(
+            qc,
+            basis_gates=["cz", "cx", "u3", "u2", "u1"],
+            coupling_map=coupling_map,
+            optimization_level=2,
+        )
 
 
 if __name__ == "__main__":
