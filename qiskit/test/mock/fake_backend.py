@@ -145,6 +145,11 @@ class FakeBackend(BackendV1):
                 sim = aer.Aer.get_backend("qasm_simulator")
                 if self.properties():
                     from qiskit.providers.aer.noise import NoiseModel
+                    for instruction, qubits, clbits in circuits.data:
+                        if instruction.name in self.configuration().basis_gates:
+                            continue
+                        else:
+                            raise QiskitError(f'Instruction {instruction.name} not natively supported.')
 
                     noise_model = NoiseModel.from_backend(self, warnings=False)
                     job = sim.run(circuits, noise_model=noise_model, **kwargs)
