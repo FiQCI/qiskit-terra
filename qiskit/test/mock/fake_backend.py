@@ -146,7 +146,7 @@ class FakeBackend(BackendV1):
                 if self.properties():
                     from qiskit.providers.aer.noise import NoiseModel
                     for instruction, qubits, clbits in circuits.data:
-                        if instruction.name in self.configuration().basis_gates:
+                        if instruction.name in self.configuration().basis_gates or instruction.name == "measure":
                             continue
                         else:
                             raise QiskitError(f'Instruction {instruction.name} not natively supported.')
