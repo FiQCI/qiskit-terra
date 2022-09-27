@@ -18,6 +18,7 @@ Base class for dummy backends.
 
 import uuid
 import warnings
+import re
 
 from qiskit import circuit
 from qiskit.providers.models import BackendProperties
@@ -25,6 +26,7 @@ from qiskit.providers import BackendV1, BaseBackend
 from qiskit import pulse
 from qiskit.exceptions import QiskitError
 from qiskit.test.mock import fake_job
+from qiskit.compiler import transpile
 
 try:
     from qiskit.providers import aer
@@ -152,6 +154,27 @@ class FakeBackend(BackendV1):
                             raise QiskitError(f'Instruction {instruction.name} not natively supported.')
 
                     noise_model = NoiseModel.from_backend(self, warnings=False)
+                    """
+                    User can run with qubit_mapping option in fake_backend.run()
+                    converted qubit_mapping in the format:
+                    qubit_mapping = {virtual_qubits[0]: "QB1",
+                                        virtual_qubits[1]: "QB3",}
+                    Extracts the numbers from string in QB1 and reduces the number by 1 (to account for indexing)
+                    Then the circuit is transpiled into a routed version of the circuit. 
+                    The qubit mapping argument is then deleted from **kwargs
+                    """
+                    if 'qubit_mapping' in kwargs:
+                        converted_mapping_dict = {}
+                        for key, value in kwargs.get("qubit_mapping").items():
+                            temp = re.findall(r'\d+', value)
+                            res = list(map(int, temp))
+                            new_val = res[0]-1
+                            converted_mapping_dict[key] = new_val
+
+                        circuits = transpile(circuits,initial_layout=converted_mapping_dict)
+                        kwargs.pop('qubit_mapping', None)
+
+
                     job = sim.run(circuits, noise_model=noise_model, **kwargs)
                 else:
                     job = sim.run(circuits, **kwargs)
